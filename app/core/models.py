@@ -10,6 +10,8 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase
 import enum
 
+from app.config.settings import beijing_now
+
 
 class Base(DeclarativeBase):
     """Base class for all models."""
@@ -66,8 +68,8 @@ class PlatformAccount(Base):
     last_error = Column(Text, nullable=True)
     cookies = Column(JSON, nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=beijing_now)
+    updated_at = Column(DateTime, default=beijing_now, onupdate=beijing_now)
     
     __table_args__ = (
         UniqueConstraint('platform', 'username', name='uq_platform_username'),
@@ -86,8 +88,8 @@ class WatchTarget(Base):
     keyword = Column(String(100), nullable=True)  # Keyword monitoring
     display_name = Column(String(100), nullable=False)  # UI display name
     enabled = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=beijing_now)
+    updated_at = Column(DateTime, default=beijing_now, onupdate=beijing_now)
     
     __table_args__ = (
         Index('ix_watch_target_platform_type', 'platform', 'target_type'),
@@ -109,7 +111,7 @@ class SentimentItem(Base):
     content = Column(Text, nullable=True)
     url = Column(String(500), nullable=True)
     posted_at = Column(DateTime, nullable=True, index=True)
-    fetched_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=beijing_now)
     sentiment_score = Column(Float, nullable=True)  # Sentiment score
     heat_score = Column(Float, nullable=True)  # Heat/popularity score
     topic = Column(String(200), nullable=True)
@@ -135,7 +137,7 @@ class DailyJobRun(Base):
     error_detail = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=beijing_now)
     
     __table_args__ = (
         UniqueConstraint('date', 'platform', name='uq_date_platform'),

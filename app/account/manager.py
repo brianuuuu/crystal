@@ -1,7 +1,7 @@
 """
 Account Manager - Account CRUD and Cookie Management
 """
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from loguru import logger
 
@@ -107,3 +107,81 @@ class AccountManager:
     def deactivate_account(self, account_id: int) -> Optional[PlatformAccount]:
         """Deactivate an account."""
         return self.repo.update(account_id, is_active=False)
+
+
+# Health check URLs for each platform (use main pages that require login)
+HEALTH_CHECK_URLS = {
+    "xueqiu": "https://xueqiu.com/",
+    "weibo": "https://weibo.com/",
+    "zhihu": "https://www.zhihu.com/",
+}
+
+# Required cookies for each platform to consider logged in
+REQUIRED_COOKIES = {
+    "xueqiu": ["xq_a_token"],
+    "weibo": ["SUB", "SUBP"],
+    "zhihu": ["z_c0"],
+}
+
+
+async def check_account_health(account: PlatformAccount) -> Tuple[bool, Optional[str]]:
+    """
+    Verify if stored cookies are still valid by fetching the main page.
+    
+    Health check logic:
+    - Check if required cookies exist
+    - Fetch main page and verify 200 OK with HTML content
+    
+    Args:
+        account: PlatformAccount instance with cookies
+    
+    Returns:
+        Tuple of (is_healthy, error_message)
+    """
+    import httpx
+    
+    platform = account.platform
+    
+    if platform not in HEALTH_CHECK_URLS:
+        return False, f"Unsupported platform: {platform}"
+    
+    if not account.cookies:
+        return False, "No cookies stored"
+    
+    cookies = account.cookies
+    
+    # Check if required cookies exist
+    required = REQUIRED_COOKIES.get(platform, [])
+    has_required = any(k in cookies for k in required)
+    if not has_required:
+        return False, f"Missing required cookies: {required}"
+    
+    url = HEALTH_CHECK_URLS[platform]
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            response = await client.get(url, cookies=cookies, headers=headers)
+            
+            # Check for successful response
+            if response.status_code == 200:
+                html = response.text
+                # Basic check: HTML should contain <html> tag and be reasonably long
+                if "<html" in html.lower() and len(html) > 1000:
+                    return True, None
+                else:
+                    return False, f"Invalid HTML response (len={len(html)})"
+            elif response.status_code in (401, 403):
+                return False, f"Auth failed: {response.status_code}"
+            else:
+                return False, f"Health check failed: {response.status_code}"
+            
+    except httpx.TimeoutException:
+        return False, "Health check timed out"
+    except Exception as e:
+        logger.error(f"Health check error for {platform}: {e}")
+        return False, f"Health check error: {str(e)}"

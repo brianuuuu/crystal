@@ -14,7 +14,7 @@ class LoginService:
     # Platform login URLs
     LOGIN_URLS = {
         "weibo": "https://passport.weibo.com/sso/signin",
-        "zhihu": "https://www.zhihu.com/signin",
+        "zhihu": "https://www.zhihu.com",
         "xueqiu": "https://xueqiu.com",
     }
     
@@ -235,3 +235,118 @@ def sync_login(platform: str, username: str, password: str) -> Tuple[bool, Optio
     """Synchronous wrapper for login."""
     service = LoginService()
     return asyncio.run(service.login(platform, username, password))
+
+
+# Platform-specific cookie keys for login detection
+PLATFORM_COOKIE_KEYS = {
+    "xueqiu": ["xq_a_token"],
+    "weibo": ["SUB", "SUBP"],
+    "zhihu": ["z_c0"],
+}
+
+
+
+async def manual_login(
+    platform: str,
+    timeout: int = 120,
+    poll_interval: int = 2
+) -> Tuple[bool, Optional[Dict], Optional[str]]:
+    """
+    Open a visible browser for manual login with cookie polling.
+    
+    Uses sync Playwright API wrapped in thread executor to avoid
+    Windows asyncio subprocess issues.
+    """
+    import concurrent.futures
+    
+    # Run sync version in thread pool to avoid Windows asyncio subprocess issues
+    loop = asyncio.get_running_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        result = await loop.run_in_executor(
+            pool,
+            _sync_manual_login_impl,
+            platform,
+            timeout,
+            poll_interval
+        )
+    return result
+
+
+def _sync_manual_login_impl(
+    platform: str,
+    timeout: int = 120,
+    poll_interval: int = 2
+) -> Tuple[bool, Optional[Dict], Optional[str]]:
+    """
+    Synchronous implementation of manual login.
+    Opens a visible browser for user to manually complete login.
+    """
+    import time
+    
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return False, None, "Playwright not installed. Run: pip install playwright && playwright install chromium"
+    
+    login_urls = LoginService.LOGIN_URLS
+    
+    if platform not in login_urls:
+        return False, None, f"Unsupported platform: {platform}"
+    
+    if platform not in PLATFORM_COOKIE_KEYS:
+        return False, None, f"No cookie detection configured for: {platform}"
+    
+    login_url = login_urls[platform]
+    required_cookies = PLATFORM_COOKIE_KEYS[platform]
+    
+    logger.info(f"Starting manual login for {platform}")
+    logger.info(f"Please complete login in the browser window. Timeout: {timeout}s")
+    
+    try:
+        with sync_playwright() as p:
+            # Launch visible browser
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+            
+            page.goto(login_url, timeout=30000)
+            
+            # Poll for cookies
+            start_time = time.time()
+            
+            while True:
+                elapsed = time.time() - start_time
+                
+                if elapsed >= timeout:
+                    browser.close()
+                    return False, None, f"Login timeout after {timeout} seconds"
+                
+                # Check cookies
+                cookies = context.cookies()
+                cookie_names = {c["name"] for c in cookies}
+                
+                # Check if any required cookie is present
+                found_cookie = any(key in cookie_names for key in required_cookies)
+                
+                if found_cookie:
+                    # Login detected, save all cookies
+                    cookies_dict = {c["name"]: c["value"] for c in cookies}
+                    logger.info(f"Login successful for {platform}. Found required cookies.")
+                    browser.close()
+                    return True, cookies_dict, None
+                
+                # Wait before next poll
+                time.sleep(poll_interval)
+                
+    except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        error_msg = f"Manual login error: {str(e) or 'Unknown error'}"
+        logger.error(f"{error_msg}\n{error_detail}")
+        return False, None, error_msg
+
+
+def sync_manual_login(platform: str, timeout: int = 120) -> Tuple[bool, Optional[Dict], Optional[str]]:
+    """Synchronous wrapper for manual login."""
+    return _sync_manual_login_impl(platform, timeout)
+

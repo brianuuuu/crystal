@@ -48,7 +48,7 @@ const { RangePicker } = DatePicker;
 const platformConfig = {
     weibo: { name: '微博', color: '#e6162d', icon: <WeiboOutlined /> },
     zhihu: { name: '知乎', color: '#0084ff', icon: <MessageOutlined /> },
-    xueqiu: { name: '雪球', color: '#f59e0b', icon: <StockOutlined /> },
+    xueqiu: { name: '雪球', color: '#ffffff', icon: <StockOutlined /> },
 };
 
 // Status icons
@@ -137,30 +137,39 @@ const SentimentCard = ({ item }) => {
 
 // Account Status Component
 const AccountStatus = ({ accounts, onLogin }) => {
-    const [loginModalVisible, setLoginModalVisible] = useState(false);
-    const [loginPlatform, setLoginPlatform] = useState(null);
-    const [form] = Form.useForm();
     const [loading, setLoading] = useState(false);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [selectedPlatform, setSelectedPlatform] = useState(null);
 
-    const handleLogin = async (values) => {
+    const handleOpenModal = (platform) => {
+        setSelectedPlatform(platform);
+        setModalVisible(true);
+    };
+
+    const handleManualLogin = async () => {
+        if (!selectedPlatform) return;
+
         setLoading(true);
+        message.info(`正在打开 ${platformConfig[selectedPlatform]?.name} 登录页面，请在浏览器中完成登录...`);
+
         try {
-            await axios.post('/api/v1/auth/login', {
-                platform: loginPlatform,
-                username: values.username,
-                password: values.password,
-                login_type: 'password',
+            await axios.post('/api/v1/auth/manual-login', {
+                platform: selectedPlatform,
+                timeout: 120,
             });
-            message.success('登录成功');
-            setLoginModalVisible(false);
-            form.resetFields();
+            message.success('登录成功，Cookie 已保存');
+            setModalVisible(false);
             onLogin?.();
         } catch (error) {
-            message.error(error.response?.data?.detail || '登录失败');
+            const detail = error.response?.data?.detail || '登录超时或失败';
+            message.error(detail);
         } finally {
             setLoading(false);
         }
     };
+
+    const selectedAccount = accounts.find((a) => a.platform === selectedPlatform);
+    const selectedConfig = platformConfig[selectedPlatform];
 
     return (
         <>
@@ -168,29 +177,23 @@ const AccountStatus = ({ accounts, onLogin }) => {
                 {['weibo', 'zhihu', 'xueqiu'].map((platform) => {
                     const config = platformConfig[platform];
                     const account = accounts.find((a) => a.platform === platform);
-                    const status = account?.login_status || 'offline';
+                    const isHealthy = account?.is_healthy;
+                    const status = isHealthy ? 'online' : 'offline';
 
                     return (
                         <Tooltip
                             key={platform}
-                            title={
-                                account
-                                    ? `${config.name}: ${account.username} (${status === 'online' ? '在线' : '离线'})`
-                                    : `${config.name}: 未配置`
-                            }
+                            title={`${config.name} - 点击查看详情`}
                         >
                             <Button
                                 type="text"
                                 size="small"
-                                onClick={() => {
-                                    setLoginPlatform(platform);
-                                    setLoginModalVisible(true);
-                                }}
+                                onClick={() => handleOpenModal(platform)}
                                 style={{
                                     display: 'flex',
                                     alignItems: 'center',
                                     gap: 4,
-                                    color: status === 'online' ? config.color : '#6b6b7a',
+                                    color: isHealthy ? config.color : '#6b6b7a',
                                 }}
                             >
                                 {statusIcons[status]}
@@ -202,43 +205,88 @@ const AccountStatus = ({ accounts, onLogin }) => {
             </div>
 
             <Modal
-                title={`${platformConfig[loginPlatform]?.name || ''} 账号登录`}
-                open={loginModalVisible}
-                onCancel={() => setLoginModalVisible(false)}
-                footer={null}
-                destroyOnClose
+                title={
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {selectedConfig?.icon}
+                        <span>{selectedConfig?.name || ''} 账号状态</span>
+                    </div>
+                }
+                open={modalVisible}
+                onCancel={() => setModalVisible(false)}
+                footer={[
+                    <Button key="cancel" onClick={() => setModalVisible(false)}>
+                        关闭
+                    </Button>,
+                    <Button
+                        key="login"
+                        type="primary"
+                        loading={loading}
+                        icon={<LoginOutlined />}
+                        onClick={handleManualLogin}
+                    >
+                        {selectedAccount ? '重新登录' : '立即登录'}
+                    </Button>,
+                ]}
             >
-                <Form form={form} onFinish={handleLogin} layout="vertical">
-                    <Form.Item
-                        name="username"
-                        label="用户名"
-                        rules={[{ required: true, message: '请输入用户名' }]}
-                    >
-                        <Input prefix={<UserOutlined />} placeholder="请输入用户名" />
-                    </Form.Item>
-                    <Form.Item
-                        name="password"
-                        label="密码"
-                        rules={[{ required: true, message: '请输入密码' }]}
-                    >
-                        <Input.Password placeholder="请输入密码" />
-                    </Form.Item>
-                    <Form.Item>
-                        <Button
-                            type="primary"
-                            htmlType="submit"
-                            loading={loading}
-                            icon={<LoginOutlined />}
-                            block
-                        >
-                            登录
-                        </Button>
-                    </Form.Item>
-                </Form>
+                {selectedAccount ? (
+                    <div style={{ padding: '8px 0' }}>
+                        <Row gutter={[16, 16]}>
+                            <Col span={12}>
+                                <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 4 }}>账号状态</div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    {selectedAccount.is_healthy ? (
+                                        <>
+                                            <CheckCircleFilled style={{ color: '#52c41a' }} />
+                                            <span style={{ color: '#52c41a' }}>在线</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CloseCircleFilled style={{ color: '#ff4d4f' }} />
+                                            <span style={{ color: '#ff4d4f' }}>离线</span>
+                                        </>
+                                    )}
+                                </div>
+                            </Col>
+                            <Col span={12}>
+                                <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 4 }}>用户名</div>
+                                <div>{selectedAccount.username || '-'}</div>
+                            </Col>
+                            <Col span={12}>
+                                <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 4 }}>上次登录</div>
+                                <div>
+                                    {selectedAccount.last_login_at
+                                        ? dayjs(selectedAccount.last_login_at).format('YYYY-MM-DD HH:mm:ss')
+                                        : '从未登录'}
+                                </div>
+                            </Col>
+                            <Col span={12}>
+                                <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 4 }}>最新心跳</div>
+                                <div>
+                                    {selectedAccount.checked_at
+                                        ? dayjs(selectedAccount.checked_at).format('YYYY-MM-DD HH:mm:ss')
+                                        : '-'}
+                                </div>
+                            </Col>
+                            {selectedAccount.health_error && (
+                                <Col span={24}>
+                                    <div style={{ color: '#8c8c8c', fontSize: 12, marginBottom: 4 }}>错误信息</div>
+                                    <div style={{ color: '#ff4d4f' }}>{selectedAccount.health_error}</div>
+                                </Col>
+                            )}
+                        </Row>
+                    </div>
+                ) : (
+                    <div style={{ textAlign: 'center', padding: '24px 0', color: '#8c8c8c' }}>
+                        <p>该平台尚未配置账号</p>
+                        <p>点击"立即登录"按钮开始登录</p>
+                    </div>
+                )}
             </Modal>
         </>
     );
 };
+
+
 
 // Main Timeline Component
 const Timeline = () => {
@@ -386,7 +434,7 @@ const Timeline = () => {
                         <Card size="small" style={{ background: '#16161f', borderColor: '#2a2a3a' }}>
                             <Statistic
                                 title={<Text type="secondary">在线账号</Text>}
-                                value={accounts.filter((a) => a.login_status === 'online').length}
+                                value={accounts.filter((a) => a.is_healthy).length}
                                 suffix={`/ ${accounts.length}`}
                                 valueStyle={{ color: '#10b981' }}
                             />

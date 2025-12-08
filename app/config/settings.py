@@ -42,6 +42,10 @@ class Settings(BaseSettings):
     ZHIHU_BASE_URL: str = "https://www.zhihu.com"
     XUEQIU_BASE_URL: str = "https://xueqiu.com"
     
+    # Manual Login
+    MANUAL_LOGIN_TIMEOUT: int = 120  # seconds
+    MANUAL_LOGIN_POLL_INTERVAL: int = 2  # seconds
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
@@ -54,3 +58,15 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+# Beijing timezone utility
+from datetime import timezone, timedelta
+
+BEIJING_TZ = timezone(timedelta(hours=8))
+
+
+def beijing_now():
+    """Get current time in Beijing timezone."""
+    from datetime import datetime
+    return datetime.now(BEIJING_TZ)

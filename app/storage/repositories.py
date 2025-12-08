@@ -10,6 +10,7 @@ from app.core.models import (
     PlatformAccount, WatchTarget, SentimentItem, DailyJobRun,
     LoginStatus, JobStatus
 )
+from app.config.settings import beijing_now
 
 
 class AccountRepository:
@@ -67,7 +68,7 @@ class AccountRepository:
         if account:
             for key, value in kwargs.items():
                 setattr(account, key, value)
-            account.updated_at = datetime.utcnow()
+            account.updated_at = beijing_now()
             self.db.commit()
             self.db.refresh(account)
         return account
@@ -85,7 +86,7 @@ class AccountRepository:
             "last_error": error,
         }
         if status == LoginStatus.ONLINE.value:
-            update_data["last_login_at"] = datetime.utcnow()
+            update_data["last_login_at"] = beijing_now()
         if cookies is not None:
             update_data["cookies"] = cookies
         return self.update(account_id, **update_data)
@@ -132,7 +133,7 @@ class WatchTargetRepository:
         if target:
             for key, value in kwargs.items():
                 setattr(target, key, value)
-            target.updated_at = datetime.utcnow()
+            target.updated_at = beijing_now()
             self.db.commit()
             self.db.refresh(target)
         return target
@@ -251,7 +252,7 @@ class JobRepository:
             date=date,
             platform=platform,
             status=JobStatus.PENDING.value,
-            started_at=datetime.utcnow()
+            started_at=beijing_now()
         )
         self.db.add(job)
         self.db.commit()
@@ -277,7 +278,7 @@ class JobRepository:
             if error_detail is not None:
                 job.error_detail = error_detail
             if status in [JobStatus.SUCCESS.value, JobStatus.FAILED.value, JobStatus.PARTIAL.value]:
-                job.finished_at = datetime.utcnow()
+                job.finished_at = beijing_now()
             self.db.commit()
             self.db.refresh(job)
         return job

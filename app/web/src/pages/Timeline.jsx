@@ -36,6 +36,7 @@ import {
     CloseCircleFilled,
     ExclamationCircleFilled,
     LoginOutlined,
+    CloudDownloadOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import axios from 'axios';
@@ -48,7 +49,7 @@ const { RangePicker } = DatePicker;
 const platformConfig = {
     weibo: { name: '微博', color: '#e6162d', icon: <WeiboOutlined /> },
     zhihu: { name: '知乎', color: '#0084ff', icon: <MessageOutlined /> },
-    xueqiu: { name: '雪球', color: '#ffffff', icon: <StockOutlined /> },
+    xueqiu: { name: '雪球', color: '#f59e0b', icon: <StockOutlined /> },
 };
 
 // Status icons
@@ -362,6 +363,26 @@ const Timeline = () => {
         fetchAccounts();
     };
 
+    const [crawling, setCrawling] = useState(false);
+
+    const handleCrawl = async () => {
+        const platform = activeTab === 'all' ? 'all' : activeTab;
+        setCrawling(true);
+        message.info(`正在抓取 ${platform === 'all' ? '全部平台' : platformConfig[platform]?.name} 今日数据...`);
+
+        try {
+            const response = await axios.post(`/api/v1/crawl?platform=${platform}`);
+            const result = response.data;
+            message.success(`抓取完成！新增 ${result.total_saved} 条数据`);
+            fetchData(); // Refresh data after crawl
+        } catch (error) {
+            const detail = error.response?.data?.detail || '抓取失败';
+            message.error(detail);
+        } finally {
+            setCrawling(false);
+        }
+    };
+
     const handleSearch = (value) => {
         setKeyword(value);
         setPage(1);
@@ -494,12 +515,22 @@ const Timeline = () => {
                                 allowClear
                             />
                         </Space>
-                        <Button
-                            icon={<ReloadOutlined />}
-                            onClick={handleRefresh}
-                        >
-                            刷新
-                        </Button>
+                        <Space>
+                            <Button
+                                type="primary"
+                                icon={<CloudDownloadOutlined />}
+                                onClick={handleCrawl}
+                                loading={crawling}
+                            >
+                                抓取今日数据
+                            </Button>
+                            <Button
+                                icon={<ReloadOutlined />}
+                                onClick={handleRefresh}
+                            >
+                                刷新
+                            </Button>
+                        </Space>
                     </Space>
                 </Card>
 

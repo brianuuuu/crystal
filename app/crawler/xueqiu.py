@@ -290,6 +290,181 @@ class XueqiuCrawler(BaseCrawler):
         
         return items
     
+    async def fetch_following_feed(
+        self,
+        from_date: datetime,
+        to_date: datetime,
+        max_pages: int = 5
+    ) -> List[Dict]:
+        """
+        Fetch posts from all users the logged-in account is following.
+        Uses Playwright (sync API via executor) to render the page and bypass WAF protection.
+        
+        Args:
+            from_date: Start of date range
+            to_date: End of date range  
+            max_pages: Maximum scrolls to perform
+        
+        Returns:
+            List of sentiment item dictionaries
+        """
+        if not self.cookies:
+            logger.warning("No cookies for fetching following feed")
+            return []
+        
+        # Run sync playwright in thread pool to avoid Windows asyncio issue
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+        
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            items = await loop.run_in_executor(
+                executor,
+                self._sync_fetch_following_feed,
+                from_date,
+                to_date,
+                max_pages
+            )
+        
+        return items
+    
+    def _sync_fetch_following_feed(
+        self,
+        from_date: datetime,
+        to_date: datetime,
+        max_pages: int
+    ) -> List[Dict]:
+        """Sync implementation of fetch_following_feed using Playwright sync API."""
+        items = []
+        
+        try:
+            from playwright.sync_api import sync_playwright
+            import re
+            import hashlib
+            
+            with sync_playwright() as p:
+                # Use visible browser so user can complete verification if needed
+                browser = p.chromium.launch(headless=False)
+                context = browser.new_context()
+                
+                # Add cookies BEFORE creating page - use domain format
+                logger.info(f"Adding {len(self.cookies)} cookies for Xueqiu")
+                cookie_list = []
+                for name, value in self.cookies.items():
+                    cookie_list.append({
+                        "name": name,
+                        "value": str(value),
+                        "domain": ".xueqiu.com",
+                        "path": "/",
+                    })
+                context.add_cookies(cookie_list)
+                
+                page = context.new_page()
+                
+                # Navigate to homepage (cookies should already be set)
+                page.goto("https://xueqiu.com/", timeout=30000)
+                page.wait_for_load_state("networkidle", timeout=20000)
+                page.wait_for_timeout(3000)
+                
+                # Wait for page to be fully loaded
+                page.wait_for_load_state("networkidle", timeout=20000)
+                
+                # Wait a bit for dynamic content to render
+                page.wait_for_timeout(3000)
+                
+                # Save screenshot for debugging
+                import os
+                debug_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "xueqiu_debug.png")
+                page.screenshot(path=debug_path)
+                logger.info(f"Saved debug screenshot to {debug_path}")
+                
+                # Log page title and URL to check if we're on the right page
+                logger.info(f"Page title: {page.title()}")
+                logger.info(f"Page URL: {page.url}")
+                
+                # Scroll to load more content
+                for i in range(max_pages):
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    page.wait_for_timeout(2000)
+                
+                # Get all links that look like status/post links
+                import re
+                
+                # Try multiple link patterns
+                all_links = page.query_selector_all("a[href*='/status/']")
+                if not all_links:
+                    all_links = page.query_selector_all("a[href*='xueqiu.com/']")
+                if not all_links:
+                    # Get all links and filter
+                    all_links = page.query_selector_all("a[href]")
+                    logger.info(f"Found {len(all_links)} total links, filtering...")
+                    
+                logger.info(f"Found {len(all_links)} status links on page")
+                
+                seen_ids = set()
+                
+                for link in all_links:
+                    try:
+                        href = link.get_attribute("href") or ""
+                        
+                        # Extract status ID from href
+                        match = re.search(r'/(\d+)', href)
+                        if not match:
+                            continue
+                        
+                        status_id = match.group(1)
+                        if status_id in seen_ids:
+                            continue
+                        seen_ids.add(status_id)
+                        
+                        # Try to get the parent container that has all the info
+                        parent = link
+                        for _ in range(5):  # Go up max 5 levels
+                            p = parent.evaluate("el => el.parentElement")
+                            if p:
+                                parent = page.query_selector(f"[data-id='{status_id}']") or parent
+                            else:
+                                break
+                        
+                        # Get text content from the link or nearby elements
+                        content = ""
+                        try:
+                            # Try to get content from common selectors
+                            content_el = page.query_selector(f"a[href*='/{status_id}'] + *") or \
+                                        page.query_selector(f"[data-id='{status_id}']")
+                            if content_el:
+                                content = content_el.inner_text()
+                        except:
+                            pass
+                        
+                        if not content:
+                            content = link.inner_text() or ""
+                        
+                        if len(content) < 10:
+                            continue
+                        
+                        item = self._build_item(
+                            comment_id=status_id,
+                            content=content[:1000],
+                            url=href if href.startswith("http") else (f"https:{href}" if href.startswith("//") else f"https://xueqiu.com{href}"),
+                            posted_at=datetime.now(),  # Use current time as posted time
+                            topic="关注动态",
+                        )
+                        items.append(item)
+                        
+                    except Exception as e:
+                        logger.debug(f"Error parsing post: {e}")
+                        continue
+                
+                browser.close()
+                
+        except Exception as e:
+            import traceback
+            logger.error(f"Error fetching Xueqiu following feed: {e}\n{traceback.format_exc()}")
+        
+        logger.info(f"Xueqiu: fetched {len(items)} items from following feed")
+        return items
+    
     def _get_headers(self) -> Dict:
         """Get common headers for Xueqiu requests."""
         return {

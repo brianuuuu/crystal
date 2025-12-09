@@ -310,3 +310,132 @@ class ZhihuCrawler(BaseCrawler):
             logger.error(f"Error searching Zhihu for '{keyword}': {e}")
         
         return items
+
+    async def fetch_following_feed(
+        self,
+        from_date: datetime,
+        to_date: datetime,
+        max_pages: int = 5
+    ) -> List[Dict]:
+        """
+        Fetch posts from all users the logged-in account is following.
+        Uses Playwright (sync API via executor) to render the page.
+        """
+        if not self.cookies:
+            logger.warning("No cookies for fetching Zhihu following feed")
+            return []
+        
+        # Run sync playwright in thread pool to avoid Windows asyncio issue
+        import asyncio
+        from concurrent.futures import ThreadPoolExecutor
+        
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            items = await loop.run_in_executor(
+                executor,
+                self._sync_fetch_following_feed,
+                from_date,
+                to_date,
+                max_pages
+            )
+        
+        return items
+    
+    def _sync_fetch_following_feed(
+        self,
+        from_date: datetime,
+        to_date: datetime,
+        max_pages: int
+    ) -> List[Dict]:
+        """Sync implementation of fetch_following_feed using Playwright sync API."""
+        items = []
+        
+        try:
+            from playwright.sync_api import sync_playwright
+            import re
+            import hashlib
+            
+            with sync_playwright() as p:
+                # Use visible browser so user can complete verification if needed
+                browser = p.chromium.launch(headless=False)
+                context = browser.new_context()
+                
+                # Add cookies BEFORE creating page - use domain format
+                logger.info(f"Adding {len(self.cookies)} cookies for Zhihu")
+                cookie_list = []
+                for name, value in self.cookies.items():
+                    cookie_list.append({
+                        "name": name,
+                        "value": str(value),
+                        "domain": ".zhihu.com",
+                        "path": "/",
+                    })
+                context.add_cookies(cookie_list)
+                
+                page = context.new_page()
+                
+                # Navigate to Zhihu homepage (cookies should already be set)
+                page.goto("https://www.zhihu.com/", timeout=30000)
+                page.wait_for_load_state("networkidle", timeout=20000)
+                page.wait_for_timeout(3000)
+                
+                # Save debug screenshot
+                import os
+                debug_path = os.path.join(os.path.dirname(__file__), "..", "..", "data", "zhihu_debug.png")
+                page.screenshot(path=debug_path)
+                logger.info(f"Saved Zhihu debug screenshot to {debug_path}")
+                logger.info(f"Page title: {page.title()}")
+                logger.info(f"Page URL: {page.url}")
+                
+                # Scroll to load more content
+                for i in range(max_pages):
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    page.wait_for_timeout(2000)
+                
+                # Find all answer/article links
+                all_links = page.query_selector_all("a[href*='/answer/'], a[href*='/p/'], a[href*='/question/']")
+                logger.info(f"Found {len(all_links)} content links on Zhihu page")
+                
+                seen_ids = set()
+                
+                for link in all_links:
+                    try:
+                        href = link.get_attribute("href") or ""
+                        
+                        # Extract ID from href
+                        match = re.search(r'/(?:answer|p|question)/(\d+)', href)
+                        if not match:
+                            continue
+                        
+                        content_id = match.group(1)
+                        if content_id in seen_ids:
+                            continue
+                        seen_ids.add(content_id)
+                        
+                        # Get text content from the link
+                        content = link.inner_text() or ""
+                        
+                        if len(content) < 10:
+                            continue
+                        
+                        item = self._build_item(
+                            comment_id=content_id,
+                            content=content[:1000],
+                            url=href if href.startswith("http") else (f"https:{href}" if href.startswith("//") else f"https://www.zhihu.com{href}"),
+                            posted_at=datetime.now(),  # Use current time as posted time
+                            topic="关注动态",
+                        )
+                        items.append(item)
+                        
+                    except Exception as e:
+                        logger.debug(f"Error parsing Zhihu link: {e}")
+                        continue
+                
+                browser.close()
+                
+        except Exception as e:
+            import traceback
+            logger.error(f"Error fetching Zhihu following feed: {e}\n{traceback.format_exc()}")
+        
+        logger.info(f"Zhihu: fetched {len(items)} items from following feed")
+        return items

@@ -12,7 +12,7 @@
   --text-secondary: #a0a0b0;
   --text-muted: #6b6b7a;
   
-  --accent-primary: #00d9ff;
+  --accent-primary: #3673f5;
   --accent-secondary: #7c3aed;
   --accent-success: #10b981;
   --accent-warning: #f59e0b;
@@ -88,7 +88,7 @@ a {
 }
 
 a:hover {
-  color: #33e0ff;
+  color: #5a8df7;
 }
 
 /* Animations */
@@ -157,7 +157,7 @@ a:hover {
 
 /* Glow Effects */
 .glow-primary {
-  box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
+  box-shadow: 0 0 20px rgba(54, 115, 245, 0.3);
 }
 
 .glow-accent {

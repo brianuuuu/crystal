@@ -71,7 +71,7 @@ const SentimentCard = ({ item }) => {
                 marginBottom: 12,
                 background: '#16161f',
                 borderColor: '#2a2a3a',
-                borderLeft: `3px solid ${platform.color}`,
+                border: '1px solid #2a2a3a',
             }}
             hoverable
         >

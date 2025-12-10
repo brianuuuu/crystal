@@ -9,11 +9,11 @@ const customTheme = {
     algorithm: darkAlgorithm,
     token: {
         // Colors
-        colorPrimary: '#00d9ff',
+        colorPrimary: '#3673f5',
         colorSuccess: '#10b981',
         colorWarning: '#f59e0b',
         colorError: '#ef4444',
-        colorInfo: '#00d9ff',
+        colorInfo: '#3673f5',
 
         // Background colors
         colorBgContainer: '#16161f',
@@ -73,9 +73,9 @@ const customTheme = {
             headerBg: '#16161f',
         },
         Tabs: {
-            inkBarColor: '#00d9ff',
-            itemActiveColor: '#00d9ff',
-            itemHoverColor: '#33e0ff',
+            inkBarColor: '#3673f5',
+            itemActiveColor: '#3673f5',
+            itemHoverColor: '#5a8df7',
         },
         Tag: {
             defaultBg: '#1a1a24',

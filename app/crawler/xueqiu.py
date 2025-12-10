@@ -382,73 +382,75 @@ class XueqiuCrawler(BaseCrawler):
                     page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                     page.wait_for_timeout(2000)
                 
-                # Get all links that look like status/post links
                 import re
+                import hashlib
                 
-                # Try multiple link patterns
-                all_links = page.query_selector_all("a[href*='/status/']")
-                if not all_links:
-                    all_links = page.query_selector_all("a[href*='xueqiu.com/']")
-                if not all_links:
-                    # Get all links and filter
-                    all_links = page.query_selector_all("a[href]")
-                    logger.info(f"Found {len(all_links)} total links, filtering...")
-                    
-                logger.info(f"Found {len(all_links)} status links on page")
+                # Log element counts for debugging
+                logger.info(f"Looking for feed content...")
+                all_divs = page.query_selector_all("div")
+                logger.info(f"Found {len(all_divs)} divs on page")
                 
+                # Find content blocks
                 seen_ids = set()
+                all_elements = page.query_selector_all("article, div[class*='timeline'], div[class*='status'], div[class*='card']")
                 
-                for link in all_links:
+                if not all_elements or len(all_elements) < 5:
+                    all_elements = page.query_selector_all("div")
+                    logger.info(f"Using fallback div selector")
+                
+                logger.info(f"Processing {len(all_elements)} elements")
+                
+                for el in all_elements:
                     try:
-                        href = link.get_attribute("href") or ""
+                        full_text = el.inner_text() or ""
+                        full_text = full_text.strip()
                         
-                        # Extract status ID from href
-                        match = re.search(r'/(\d+)', href)
-                        if not match:
+                        # Skip short or too long content
+                        if len(full_text) < 50 or len(full_text) > 2000:
                             continue
                         
-                        status_id = match.group(1)
-                        if status_id in seen_ids:
+                        # Skip UI elements
+                        if any(x in full_text for x in ['登录', '注册', '全部关注', '自选股', '条新帖', '搜索']):
                             continue
-                        seen_ids.add(status_id)
                         
-                        # Try to get the parent container that has all the info
-                        parent = link
-                        for _ in range(5):  # Go up max 5 levels
-                            p = parent.evaluate("el => el.parentElement")
-                            if p:
-                                parent = page.query_selector(f"[data-id='{status_id}']") or parent
-                            else:
-                                break
+                        # Generate unique ID
+                        content_hash = hashlib.md5(full_text[:100].encode()).hexdigest()[:16]
                         
-                        # Get text content from the link or nearby elements
-                        content = ""
-                        try:
-                            # Try to get content from common selectors
-                            content_el = page.query_selector(f"a[href*='/{status_id}'] + *") or \
-                                        page.query_selector(f"[data-id='{status_id}']")
-                            if content_el:
-                                content = content_el.inner_text()
-                        except:
-                            pass
-                        
-                        if not content:
-                            content = link.inner_text() or ""
-                        
-                        if len(content) < 10:
+                        if content_hash in seen_ids:
                             continue
+                        seen_ids.add(content_hash)
+                        
+                        # Take content as-is, clean whitespace
+                        content = ' '.join(full_text.split())
+                        
+                        # Try to find link
+                        link_el = el.query_selector("a[href*='/status/'], a[href*='/u/']")
+                        href = link_el.get_attribute("href") if link_el else ""
+                        if href:
+                            if href.startswith("//"):
+                                href = f"https:{href}"
+                            elif href.startswith("/"):
+                                href = f"https://xueqiu.com{href}"
+                        
+                        # Get first line as author
+                        lines = full_text.split('\n')
+                        author_name = lines[0].strip()[:20] if lines else ""
                         
                         item = self._build_item(
-                            comment_id=status_id,
-                            content=content[:1000],
-                            url=href if href.startswith("http") else (f"https:{href}" if href.startswith("//") else f"https://xueqiu.com{href}"),
-                            posted_at=datetime.now(),  # Use current time as posted time
+                            comment_id=content_hash,
+                            content=content[:500],
+                            author_name=author_name,
+                            url=href,
+                            posted_at=datetime.now(),
                             topic="关注动态",
                         )
                         items.append(item)
+                        logger.info(f"Extracted: {content[:50]}...")
                         
+                        if len(items) >= 30:
+                            break
+                            
                     except Exception as e:
-                        logger.debug(f"Error parsing post: {e}")
                         continue
                 
                 browser.close()

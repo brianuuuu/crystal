@@ -11,6 +11,7 @@ import sys
 from app.config import settings
 from app.storage.database import init_db
 from app.api import public_router, auth_router
+from app.api.router_watchlist import router as watchlist_router
 from app.scheduler.runner import scheduler_runner
 
 
@@ -70,6 +71,7 @@ app.add_middleware(
 # Register API routers
 app.include_router(public_router, prefix=settings.API_PREFIX)
 app.include_router(auth_router, prefix=settings.API_PREFIX)
+app.include_router(watchlist_router, prefix=settings.API_PREFIX)
 
 
 # Additional endpoints

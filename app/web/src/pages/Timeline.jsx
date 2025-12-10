@@ -37,6 +37,9 @@ import {
     ExclamationCircleFilled,
     LoginOutlined,
     CloudDownloadOutlined,
+    PlusOutlined,
+    EditOutlined,
+    DeleteOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import axios from 'axios';
@@ -288,6 +291,173 @@ const AccountStatus = ({ accounts, onLogin }) => {
 };
 
 
+// Watchlist Panel Component
+const WatchlistPanel = () => {
+    const [watchlist, setWatchlist] = useState({});
+    const [activeTab, setActiveTab] = useState('weibo');
+    const [loading, setLoading] = useState(false);
+    const [modalVisible, setModalVisible] = useState(false);
+    const [editingItem, setEditingItem] = useState(null);
+    const [form] = Form.useForm();
+
+    const fetchWatchlist = useCallback(async () => {
+        setLoading(true);
+        try {
+            const response = await axios.get('/api/v1/watchlist/all');
+            setWatchlist(response.data || {});
+        } catch (error) {
+            console.error('Failed to fetch watchlist:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchWatchlist();
+    }, [fetchWatchlist]);
+
+    const handleAdd = () => {
+        setEditingItem(null);
+        form.resetFields();
+        form.setFieldsValue({ platform: activeTab, target_type: 'account' });
+        setModalVisible(true);
+    };
+
+    const handleEdit = (item) => {
+        setEditingItem(item);
+        form.setFieldsValue(item);
+        setModalVisible(true);
+    };
+
+    const handleDelete = async (id) => {
+        try {
+            await axios.delete(`/api/v1/watchlist/${id}`);
+            message.success('删除成功');
+            fetchWatchlist();
+        } catch (error) {
+            message.error('删除失败');
+        }
+    };
+
+    const handleSubmit = async () => {
+        try {
+            const values = await form.validateFields();
+            if (editingItem) {
+                await axios.put(`/api/v1/watchlist/${editingItem.id}`, values);
+                message.success('更新成功');
+            } else {
+                await axios.post('/api/v1/watchlist', values);
+                message.success('添加成功');
+            }
+            setModalVisible(false);
+            fetchWatchlist();
+        } catch (error) {
+            message.error('保存失败');
+        }
+    };
+
+    const currentList = watchlist[activeTab] || [];
+
+    return (
+        <Card
+            title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>关注列表</span>
+                    <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleAdd}>
+                        添加
+                    </Button>
+                </div>
+            }
+            style={{ background: '#16161f', borderColor: '#2a2a3a' }}
+            bodyStyle={{ padding: 0 }}
+        >
+            <Tabs
+                activeKey={activeTab}
+                onChange={setActiveTab}
+                style={{ padding: '0 12px' }}
+                items={[
+                    { key: 'weibo', label: '微博' },
+                    { key: 'zhihu', label: '知乎' },
+                    { key: 'xueqiu', label: '雪球' },
+                ]}
+            />
+            <div style={{ maxHeight: 400, overflowY: 'auto', padding: '0 12px 12px' }}>
+                {loading ? (
+                    <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
+                ) : currentList.length === 0 ? (
+                    <Empty description="暂无关注" style={{ padding: 24 }} />
+                ) : (
+                    currentList.map((item) => (
+                        <div
+                            key={item.id}
+                            style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '8px 12px',
+                                background: '#1a1a24',
+                                borderRadius: 6,
+                                marginBottom: 8,
+                            }}
+                        >
+                            <div style={{ flex: 1 }}>
+                                <div style={{ color: '#e8e8ec', fontSize: 14 }}>{item.display_name}</div>
+                                <div style={{ color: '#6b6b7a', fontSize: 12 }}>
+                                    {item.target_type === 'account' && item.external_id}
+                                    {item.target_type === 'symbol' && `$${item.symbol}`}
+                                    {item.target_type === 'keyword' && `#${item.keyword}`}
+                                </div>
+                            </div>
+                            <Space size="small">
+                                <Button type="text" size="small" icon={<EditOutlined />} onClick={() => handleEdit(item)} />
+                                <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(item.id)} />
+                            </Space>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            <Modal
+                title={editingItem ? '编辑关注' : '添加关注'}
+                open={modalVisible}
+                onCancel={() => setModalVisible(false)}
+                onOk={handleSubmit}
+                okText="保存"
+                cancelText="取消"
+            >
+                <Form form={form} layout="vertical">
+                    <Form.Item name="platform" label="平台" rules={[{ required: true }]}>
+                        <Select>
+                            <Select.Option value="weibo">微博</Select.Option>
+                            <Select.Option value="zhihu">知乎</Select.Option>
+                            <Select.Option value="xueqiu">雪球</Select.Option>
+                        </Select>
+                    </Form.Item>
+                    <Form.Item name="target_type" label="类型" rules={[{ required: true }]}>
+                        <Select>
+                            <Select.Option value="account">用户</Select.Option>
+                            <Select.Option value="symbol">股票代码</Select.Option>
+                            <Select.Option value="keyword">关键词</Select.Option>
+                        </Select>
+                    </Form.Item>
+                    <Form.Item name="display_name" label="显示名称" rules={[{ required: true }]}>
+                        <Input placeholder="在列表中显示的名称" />
+                    </Form.Item>
+                    <Form.Item name="external_id" label="用户ID">
+                        <Input placeholder="用户主页 UID / url_token" />
+                    </Form.Item>
+                    <Form.Item name="symbol" label="股票代码">
+                        <Input placeholder="如 SH600036" />
+                    </Form.Item>
+                    <Form.Item name="keyword" label="关键词">
+                        <Input placeholder="搜索关键词" />
+                    </Form.Item>
+                </Form>
+            </Modal>
+        </Card>
+    );
+};
+
 
 // Main Timeline Component
 const Timeline = () => {
@@ -439,20 +609,20 @@ const Timeline = () => {
             </Header>
 
             {/* Content */}
-            <Content style={{ padding: '24px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
-                {/* Stats */}
+            <Content style={{ padding: '24px', maxWidth: 1400, margin: '0 auto', width: '100%' }}>
+                {/* Stats - Full Width */}
                 <Row gutter={16} style={{ marginBottom: 24 }}>
-                    <Col span={6}>
-                        <Card size="small" style={{ background: '#16161f', borderColor: '#2a2a3a' }}>
+                    <Col span={6} style={{ display: 'flex' }}>
+                        <Card size="small" style={{ background: '#16161f', borderColor: '#2a2a3a', width: '100%' }}>
                             <Statistic
                                 title={<Text type="secondary">舆情总数</Text>}
                                 value={total}
-                                valueStyle={{ color: '#00d9ff' }}
+                                valueStyle={{ color: '#3673f5' }}
                             />
                         </Card>
                     </Col>
-                    <Col span={6}>
-                        <Card size="small" style={{ background: '#16161f', borderColor: '#2a2a3a' }}>
+                    <Col span={6} style={{ display: 'flex' }}>
+                        <Card size="small" style={{ background: '#16161f', borderColor: '#2a2a3a', width: '100%' }}>
                             <Statistic
                                 title={<Text type="secondary">在线账号</Text>}
                                 value={accounts.filter((a) => a.is_healthy).length}
@@ -461,8 +631,8 @@ const Timeline = () => {
                             />
                         </Card>
                     </Col>
-                    <Col span={6}>
-                        <Card size="small" style={{ background: '#16161f', borderColor: '#2a2a3a' }}>
+                    <Col span={6} style={{ display: 'flex' }}>
+                        <Card size="small" style={{ background: '#16161f', borderColor: '#2a2a3a', width: '100%' }}>
                             <Statistic
                                 title={<Text type="secondary">时间范围</Text>}
                                 value={dateRange?.[0]?.format('MM-DD')}
@@ -471,8 +641,8 @@ const Timeline = () => {
                             />
                         </Card>
                     </Col>
-                    <Col span={6}>
-                        <Card size="small" style={{ background: '#16161f', borderColor: '#2a2a3a' }}>
+                    <Col span={6} style={{ display: 'flex' }}>
+                        <Card size="small" style={{ background: '#16161f', borderColor: '#2a2a3a', width: '100%' }}>
                             <Statistic
                                 title={<Text type="secondary">当前平台</Text>}
                                 value={activeTab === 'all' ? '全部' : platformConfig[activeTab]?.name}
@@ -482,7 +652,8 @@ const Timeline = () => {
                     </Col>
                 </Row>
 
-                {/* Filters */}
+
+                {/* Filters - Full Width */}
                 <Card
                     size="small"
                     style={{
@@ -545,37 +716,48 @@ const Timeline = () => {
                     style={{ marginBottom: 16 }}
                 />
 
-                {/* Sentiment List */}
-                <Spin spinning={loading}>
-                    {items.length > 0 ? (
-                        <div className="sentiment-list">
-                            {items.map((item, index) => (
-                                <SentimentCard key={item.id || index} item={item} />
-                            ))}
-                        </div>
-                    ) : (
-                        <Empty
-                            description={
-                                <Text type="secondary">
-                                    暂无舆情数据，请调整筛选条件或等待数据采集
-                                </Text>
-                            }
-                            style={{ marginTop: 80 }}
-                        />
-                    )}
-                </Spin>
+                {/* Content List and Watchlist side by side */}
+                <Row gutter={24}>
+                    {/* Main Content - Left Column */}
+                    <Col xs={24} lg={17}>
+                        {/* Sentiment List */}
+                        <Spin spinning={loading}>
+                            {items.length > 0 ? (
+                                <div className="sentiment-list">
+                                    {items.map((item, index) => (
+                                        <SentimentCard key={item.id || index} item={item} />
+                                    ))}
+                                </div>
+                            ) : (
+                                <Empty
+                                    description={
+                                        <Text type="secondary">
+                                            暂无舆情数据，请调整筛选条件或等待数据采集
+                                        </Text>
+                                    }
+                                    style={{ marginTop: 80 }}
+                                />
+                            )}
+                        </Spin>
 
-                {/* Load More */}
-                {items.length > 0 && items.length < total && (
-                    <div style={{ textAlign: 'center', marginTop: 24 }}>
-                        <Button
-                            onClick={() => setPage((p) => p + 1)}
-                            loading={loading}
-                        >
-                            加载更多 ({items.length} / {total})
-                        </Button>
-                    </div>
-                )}
+                        {/* Load More */}
+                        {items.length > 0 && items.length < total && (
+                            <div style={{ textAlign: 'center', marginTop: 24 }}>
+                                <Button
+                                    onClick={() => setPage((p) => p + 1)}
+                                    loading={loading}
+                                >
+                                    加载更多 ({items.length} / {total})
+                                </Button>
+                            </div>
+                        )}
+                    </Col>
+
+                    {/* Watchlist Panel - Right Column */}
+                    <Col xs={24} lg={7}>
+                        <WatchlistPanel />
+                    </Col>
+                </Row>
             </Content>
 
             {/* Footer */}
@@ -595,3 +777,4 @@ const Timeline = () => {
 };
 
 export default Timeline;
+

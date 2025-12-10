@@ -362,15 +362,10 @@ class XueqiuCrawler(BaseCrawler):
                 page = context.new_page()
                 
                 # Navigate to homepage (cookies should already be set)
-                page.goto("https://xueqiu.com/", timeout=30000)
-                page.wait_for_load_state("networkidle", timeout=20000)
-                page.wait_for_timeout(3000)
-                
-                # Wait for page to be fully loaded
-                page.wait_for_load_state("networkidle", timeout=20000)
-                
-                # Wait a bit for dynamic content to render
-                page.wait_for_timeout(3000)
+                page.goto("https://xueqiu.com/", timeout=60000)
+                # Use domcontentloaded - Xueqiu may have long-running requests
+                page.wait_for_load_state("domcontentloaded", timeout=30000)
+                page.wait_for_timeout(8000)  # Extra wait for dynamic content
                 
                 # Save screenshot for debugging
                 import os

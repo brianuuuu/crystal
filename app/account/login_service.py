@@ -309,7 +309,35 @@ def _sync_manual_login_impl(
             context = browser.new_context()
             page = context.new_page()
             
+            # Navigate to login page first
             page.goto(login_url, timeout=30000)
+            page.wait_for_load_state("domcontentloaded", timeout=10000)
+            
+            # Clear ALL cookies, localStorage, sessionStorage to force fresh login
+            logger.info(f"Clearing existing cookies and storage for {platform} to force fresh login")
+            context.clear_cookies()
+            
+            # Also clear localStorage and sessionStorage
+            page.evaluate("localStorage.clear()")
+            page.evaluate("sessionStorage.clear()")
+            
+            # Reload the page without cookies - should show login form
+            page.reload(timeout=30000)
+            page.wait_for_load_state("domcontentloaded", timeout=10000)
+            
+            # Record baseline cookies AFTER clearing - these are auto-set by the page
+            time.sleep(2)  # Wait for any auto-cookies to be set
+            baseline_cookies = context.cookies()
+            baseline_names = {c["name"] for c in baseline_cookies}
+            baseline_values = {c["name"]: c["value"] for c in baseline_cookies}
+            
+            # Check if required cookies already exist in baseline (this is the problem!)
+            baseline_required = [k for k in required_cookies if k in baseline_names]
+            logger.info(f"Baseline cookies after clear: {baseline_names}")
+            if baseline_required:
+                logger.info(f"Warning: Required cookies {baseline_required} exist in baseline - will look for VALUE changes")
+            
+            logger.info(f"Please complete login in the browser window. Timeout: {timeout}s")
             
             # Poll for cookies
             start_time = time.time()
@@ -323,15 +351,27 @@ def _sync_manual_login_impl(
                 
                 # Check cookies
                 cookies = context.cookies()
-                cookie_names = {c["name"] for c in cookies}
+                cookie_dict = {c["name"]: c["value"] for c in cookies}
                 
-                # Check if any required cookie is present
-                found_cookie = any(key in cookie_names for key in required_cookies)
+                # Check if any required cookie is NEW or has CHANGED value
+                login_detected = False
+                for key in required_cookies:
+                    if key in cookie_dict:
+                        if key not in baseline_names:
+                            # New cookie appeared
+                            logger.info(f"New required cookie appeared: {key}")
+                            login_detected = True
+                            break
+                        elif cookie_dict[key] != baseline_values.get(key):
+                            # Cookie value changed
+                            logger.info(f"Required cookie value changed: {key}")
+                            login_detected = True
+                            break
                 
-                if found_cookie:
+                if login_detected:
                     # Login detected, save all cookies
                     cookies_dict = {c["name"]: c["value"] for c in cookies}
-                    logger.info(f"Login successful for {platform}. Found required cookies.")
+                    logger.info(f"Login successful for {platform}. Saving {len(cookies_dict)} cookies.")
                     browser.close()
                     return True, cookies_dict, None
                 

@@ -605,6 +605,20 @@ const Timeline = () => {
                                     style={{ width: 220 }}
                                     bordered={false}
                                 />
+                                <Tooltip title="Last 24 Hours">
+                                    <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<ClockCircleOutlined />}
+                                        onClick={() => {
+                                            setDateRange([dayjs().subtract(24, 'hour'), dayjs()]);
+                                            setPage(1);
+                                        }}
+                                        style={{ color: 'var(--accent-primary)' }}
+                                    >
+                                        24h
+                                    </Button>
+                                </Tooltip>
                             </Space>
 
                             <Space>

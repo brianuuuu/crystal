@@ -9,79 +9,85 @@ const customTheme = {
     algorithm: darkAlgorithm,
     token: {
         // Colors
-        colorPrimary: '#3673f5',
-        colorSuccess: '#10b981',
-        colorWarning: '#f59e0b',
-        colorError: '#ef4444',
-        colorInfo: '#3673f5',
+        colorPrimary: '#2962ff', // Sharper blue
+        colorSuccess: '#00e676', // Bright green for financial up
+        colorWarning: '#ffea00', // Bright yellow
+        colorError: '#ff1744',   // Bright red for financial down
+        colorInfo: '#2962ff',
 
         // Background colors
-        colorBgContainer: '#16161f',
-        colorBgElevated: '#1a1a24',
-        colorBgLayout: '#0a0a0f',
-        colorBgSpotlight: '#12121a',
+        colorBgContainer: '#0f1219', // Deep dark blue-black
+        colorBgElevated: '#151922',
+        colorBgLayout: '#050510',    // Almost black
+        colorBgSpotlight: '#1a1f2b',
 
         // Text colors
-        colorText: '#e8e8ec',
-        colorTextSecondary: '#a0a0b0',
-        colorTextTertiary: '#6b6b7a',
-        colorTextQuaternary: '#4a4a5a',
+        colorText: '#e0e0e0',
+        colorTextSecondary: '#8b9bb4', // Blue-grey tint
+        colorTextTertiary: '#5c6b7f',
+        colorTextQuaternary: '#3e4756',
 
         // Border
-        colorBorder: '#2a2a3a',
-        colorBorderSecondary: '#1f1f2a',
+        colorBorder: '#1f2a3d',
+        colorBorderSecondary: '#151c2a',
 
         // Typography
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        fontSize: 14,
+        fontSize: 13, // Slightly smaller for compactness
 
         // Border radius
-        borderRadius: 8,
-        borderRadiusLG: 12,
-        borderRadiusSM: 6,
+        borderRadius: 4, // Sharper corners for financial look
+        borderRadiusLG: 8,
+        borderRadiusSM: 2,
 
         // Control
-        controlHeight: 36,
-        controlHeightLG: 44,
-        controlHeightSM: 28,
+        controlHeight: 32, // Compact controls
+        controlHeightLG: 40,
+        controlHeightSM: 24,
     },
     components: {
         Layout: {
-            headerBg: '#12121a',
-            siderBg: '#12121a',
-            bodyBg: '#0a0a0f',
+            headerBg: '#0f1219',
+            headerPadding: '0 24px',
+            siderBg: '#0f1219',
+            bodyBg: '#050510',
         },
         Card: {
-            colorBgContainer: '#16161f',
+            colorBgContainer: '#0f1219',
+            headerBg: 'transparent',
         },
         Table: {
-            colorBgContainer: '#16161f',
-            headerBg: '#1a1a24',
-            rowHoverBg: '#1f1f2a',
+            colorBgContainer: '#0f1219',
+            headerBg: '#151922',
+            rowHoverBg: '#1a1f2b',
+            headerColor: '#8b9bb4',
         },
         Input: {
-            colorBgContainer: '#1a1a24',
+            colorBgContainer: '#0a0c10',
+            activeBorderColor: '#2962ff',
+            hoverBorderColor: '#448aff',
         },
         Select: {
-            colorBgContainer: '#1a1a24',
+            colorBgContainer: '#0a0c10',
         },
         DatePicker: {
-            colorBgContainer: '#1a1a24',
+            colorBgContainer: '#0a0c10',
         },
         Modal: {
-            contentBg: '#16161f',
-            headerBg: '#16161f',
+            contentBg: '#151922',
+            headerBg: '#151922',
         },
         Tabs: {
-            inkBarColor: '#3673f5',
-            itemActiveColor: '#3673f5',
-            itemHoverColor: '#5a8df7',
+            inkBarColor: '#2962ff',
+            itemActiveColor: '#2962ff',
+            itemHoverColor: '#448aff',
         },
         Tag: {
-            defaultBg: '#1a1a24',
+            defaultBg: '#151c2a',
         },
-        Badge: {
-            statusSize: 8,
+        Statistic: {
+            titleFontSize: 12,
+            contentFontSize: 20,
         },
     },
 };
